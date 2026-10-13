@@ -12,8 +12,11 @@ Launch a Docker **cloud sandbox** that runs VS Code in your browser (code-server
 ```bash
 ./launch.sh                 # create the sandbox, publish port 8080, print the URL
 ./launch.sh -n my-demo -t 2h -s large
+./launch.sh -r https://github.com/owner/repo.git   # also clone a repo into the workspace
 ./teardown.sh               # delete it when you are done
 ```
+
+Cloud sandboxes have no host workspace, so a local directory can't be passed in. Use `-r` (or `SBX_DEMO_REPO`) to clone a public `https://` repo instead. It lands in a subfolder of the workspace named after the repo, and the repo's host is added to the sandbox's allowed egress. Private repos are not supported by the script.
 
 `launch.sh` runs three things:
 
