@@ -63,7 +63,7 @@ if ! existing=$(sbx --cloud ls -q 2>&1); then
   echo "Run 'sbx login' and try again." >&2
   exit 1
 fi
-if grep -qx "$NAME" <<<"$existing"; then
+if awk -F/ -v n="$NAME" '$NF == n { found = 1 } END { exit !found }' <<<"$existing"; then
   echo "A cloud sandbox named '$NAME' already exists. Run ./teardown.sh -n $NAME first, or pick another name with -n." >&2
   exit 1
 fi
