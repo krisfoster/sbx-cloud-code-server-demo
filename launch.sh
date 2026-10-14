@@ -2,13 +2,15 @@
 #
 # Launch a Docker cloud sandbox running the code-server kit (VS Code in the browser).
 #
-#   ./launch.sh [-n NAME] [-t TTL] [-s SIZE] [-k KIT] [-r REPO_URL]
+#   ./launch.sh [-n NAME] [-t TTL] [-s SIZE] [-k KIT] [-r REPO_URL] [-e KEY[=VALUE]]...
 #
 #   -n NAME  sandbox name (letters, numbers, hyphens; default: code-server-demo)
 #   -t TTL   time to live, e.g. 2h, 90m (default: 4h; hard cap is 24h from creation)
 #   -s SIZE  micro | small | medium | large | xl (default: medium = 4 vCPU / 8 GiB)
 #   -k KIT   kit reference (default: the code-server kit in docker/sbx-kits-contrib)
 #   -r URL   https git repo to clone into the workspace (public repos only)
+#   -e VAR   env var for the sandbox, KEY=VALUE or bare KEY to copy it from your
+#            shell (repeatable). Stored inside the sandbox; see README for secrets.
 #
 # Environment overrides: SBX_DEMO_NAME, SBX_DEMO_TTL, SBX_DEMO_SIZE, SBX_DEMO_KIT, SBX_DEMO_REPO
 
@@ -20,15 +22,17 @@ SIZE="${SBX_DEMO_SIZE:-medium}"
 KIT="${SBX_DEMO_KIT:-git+https://github.com/docker/sbx-kits-contrib.git#dir=code-server}"
 REPO="${SBX_DEMO_REPO:-}"
 PORT=8080
+ENVS=()
 
-while getopts "n:t:s:k:r:h" opt; do
+while getopts "n:t:s:k:r:e:h" opt; do
   case $opt in
     n) NAME=$OPTARG ;;
     t) TTL=$OPTARG ;;
     s) SIZE=$OPTARG ;;
     k) KIT=$OPTARG ;;
     r) REPO=$OPTARG ;;
-    h) sed -n '2,14p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    e) ENVS+=("$OPTARG") ;;
+    h) sed -n '2,16p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) exit 2 ;;
   esac
 done
@@ -54,6 +58,17 @@ if [ -n "$REPO" ]; then
   esac
   EXTRA+=(--allow-network "$repo_host")
 fi
+
+for e in ${ENVS[@]+"${ENVS[@]}"}; do
+  key=${e%%=*}
+  case $key in
+    ''|[0-9]*|*[!A-Za-z0-9_]*) echo "Invalid env var name '$key' for -e." >&2; exit 2 ;;
+  esac
+  if [ "$key" = "$e" ] && [ -z "${!key+x}" ]; then
+    echo "-e $key: not set in your shell. Use -e $key=VALUE or export it first." >&2; exit 2
+  fi
+  EXTRA+=(--env "$e")
+done
 
 command -v sbx >/dev/null || { echo "sbx not found. Install: https://docs.docker.com/ai/sandboxes/get-started/" >&2; exit 1; }
 
