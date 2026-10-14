@@ -27,16 +27,37 @@ Cloud sandboxes have no host workspace, so a local directory can't be passed in.
 
 ## Sign in to Claude
 
+### Option 1: store the credential first (no login in the sandbox)
+
+Store an Anthropic credential as an `sbx` secret **before** running `launch.sh`. The sandbox gets a placeholder and the cloud proxy injects the real credential, so there is nothing to sign in to.
+
+```bash
+# Claude subscription: runs the OAuth flow in your browser on your machine
+sbx --cloud secret set anthropic --oauth
+
+# or an Anthropic API key, piped in so it stays out of shell history
+echo "$ANTHROPIC_API_KEY" | sbx --cloud secret set anthropic
+op read 'op://Private/Anthropic/api-key' | sbx --cloud secret set anthropic   # from 1Password
+```
+
+- `--oauth` is account-scoped: `--sandbox` is rejected, so every cloud sandbox you create afterwards uses it. Remove it with `sbx --cloud secret rm anthropic`.
+- Secrets are applied when a sandbox is **created**. One that already exists keeps showing "Not logged in", even after a stop and start. Tear it down and relaunch.
+- Tested with the `claude` CLI only (`claude -p` works with no login prompt). With a secret in place `claude` reports an `api_key_helper` auth method and warns that claude.ai connectors (org MCP integrations) are disabled because another auth source takes precedence.
+- The API key form is untested.
+
+### Option 2: sign in interactively
+
 1. Open the printed URL in your browser. The workspace opens on launch.
 2. Open the integrated terminal (Ctrl+`) and run `claude`, or click the Claude (Spark) icon in the sidebar once.
-3. If prompted, choose a login method, open the sign-in link in your local browser and paste the code back into the terminal.
+3. If prompted, choose a login method and open the sign-in link in your local browser.
+4. The last step redirects to `http://localhost:<port>/callback?code=...`. That listener runs inside the sandbox, but `localhost` in your browser is your own machine, so the page fails to load. Copy the full URL from the address bar and paste it (or its `code` value) back into the sandbox terminal. It still works, because the code is in the URL.
 
 > [!warning]
 > The kit starts code-server with `--auth none`. In a cloud sandbox the published port gets a public URL, so anyone holding that URL has an editor and terminal inside the sandbox. Treat the URL as a secret, keep the TTL short, and tear down when finished. For anything beyond a demo, fork the kit and add a password to the startup command.
 
 ## Secrets
 
-Prefer `sbx` secrets over env vars. The sandbox never sees the real value: the cloud proxy injects the credential into outbound requests to the matching service. Store them on your host before running `launch.sh`. They apply to all sandboxes by default, or add `--sandbox NAME` to scope one.
+Prefer `sbx` secrets over env vars. The sandbox never sees the real value: the cloud proxy injects the credential into outbound requests to the matching service. Store them on your host before running `launch.sh`. They apply to all sandboxes by default, or add `--sandbox NAME` to scope one. A secret reaches only sandboxes created after it is stored.
 
 With `--cloud`, `sbx` stores the value itself: `--command` and `--ref` are ignored and you get an `Enter secret:` prompt instead. Resolve the value yourself and pipe it in. It is a snapshot, so re-run the command when the token rotates.
 
@@ -46,6 +67,9 @@ gh auth token | sbx --cloud secret set github
 
 # The same, from 1Password (needs an authenticated `op` CLI)
 op read 'op://Private/GitHub/token' | sbx --cloud secret set github
+
+# Anthropic: see "Sign in to Claude" above
+echo "$ANTHROPIC_API_KEY" | sbx --cloud secret set anthropic
 
 # Another provider, piping the value in so it stays out of shell history
 echo "$OPENAI_API_KEY" | sbx --cloud secret set openai
@@ -79,14 +103,17 @@ sbx --cloud ttl code-server-demo +2h             # extend the TTL (24h hard cap)
 
 ## Status
 
-Written from the kit README and `sbx --cloud ... --help`. Not yet run end to end: see the checklist below before relying on it.
+Written from the kit README and `sbx --cloud ... --help`, then partly checked on `sbx` v0.48.0-rc4. Checked items below have been run; unchecked ones have not.
 
-- [ ] `--kit` with a `git+https` reference works on `sbx --cloud run`
-- [ ] The published URL is reachable and shows the workspace
-- [ ] `claude` login completes from the integrated terminal
-- [ ] `-r` clones into the workspace (and a private repo with a `github` secret)
-- [ ] `-e` variables appear in the sandbox shell
-- [ ] Piping a token into `sbx --cloud secret set github` lets a private `-r` clone succeed
+- [x] `--kit` with a `git+https` reference works on `sbx --cloud run`
+- [x] The published URL answers (`/healthz` returns 200)
+- [x] `-r` clones a public repo into the workspace
+- [x] `-e` variables appear in the sandbox shell
+- [x] `sbx --cloud secret set anthropic --oauth` lets `claude -p` run in a new sandbox with no login
+- [ ] The workspace and Claude extension render correctly in the browser
+- [ ] Interactive `claude` login from the integrated terminal completes
+- [ ] `echo $KEY | sbx --cloud secret set anthropic` (API key) works in a new sandbox
+- [ ] A `github` secret lets `-r` clone a private repo
 
 ## Sources
 
