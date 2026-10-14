@@ -4,7 +4,7 @@ Launch a Docker **cloud sandbox** that runs VS Code in your browser (code-server
 
 ## Requirements
 
-- `sbx` installed and signed in (`sbx login`). Written against `v0.47.0-rc2`.
+- `sbx` installed and signed in (`sbx login`). Written against `v0.47.0-rc2`, re-checked on `v0.48.0-rc4`.
 - Access to Docker cloud sandboxes (`sbx --cloud ls` should not error).
 
 ## Use
@@ -21,7 +21,7 @@ Cloud sandboxes have no host workspace, so a local directory can't be passed in.
 
 `launch.sh` runs three things:
 
-1. `sbx --cloud run --detached --name NAME --kit <code-server kit> claude`: creates a cloud sandbox on the built-in `claude` agent with the kit layered on. The kit is a mixin that requires `claude`, so the VS Code extension shares the sandbox's Claude setup.
+1. `sbx --cloud run -d --name NAME --kit <code-server kit> claude`: creates a cloud sandbox on the built-in `claude` agent with the kit layered on. The kit is a mixin that requires `claude`, so the VS Code extension shares the sandbox's Claude setup.
 2. `sbx --cloud ports NAME --publish 8080`: asks the cloud control plane for a public URL for code-server's port.
 3. A health check against code-server inside the sandbox, then `sbx --cloud ports NAME` to print the URL.
 

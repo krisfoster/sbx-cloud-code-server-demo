@@ -86,7 +86,7 @@ fi
 echo "==> Creating cloud sandbox '$NAME' ($SIZE, ttl $TTL)"
 echo "    kit: $KIT"
 echo "    The first create installs code-server and the Claude Code extension, so it can take a few minutes."
-sbx --cloud run --detached \
+sbx --cloud run -d \
   --name "$NAME" \
   --cpus "$CPUS" --memory "$MEM" \
   --ttl "$TTL" \
