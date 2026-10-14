@@ -38,12 +38,14 @@ Cloud sandboxes have no host workspace, so a local directory can't be passed in.
 
 Prefer `sbx` secrets over env vars. The sandbox never sees the real value: the cloud proxy injects the credential into outbound requests to the matching service. Store them on your host before running `launch.sh`. They apply to all sandboxes by default, or add `--sandbox NAME` to scope one.
 
+With `--cloud`, `sbx` stores the value itself: `--command` and `--ref` are ignored and you get an `Enter secret:` prompt instead. Resolve the value yourself and pipe it in. It is a snapshot, so re-run the command when the token rotates.
+
 ```bash
-# GitHub, reusing your gh login (re-resolved on the host when needed)
-sbx --cloud secret set github --command 'gh auth token'
+# GitHub, reusing your gh login
+gh auth token | sbx --cloud secret set github
 
 # The same, from 1Password (needs an authenticated `op` CLI)
-sbx --cloud secret set github --ref 'op://Private/GitHub/token'
+op read 'op://Private/GitHub/token' | sbx --cloud secret set github
 
 # Another provider, piping the value in so it stays out of shell history
 echo "$OPENAI_API_KEY" | sbx --cloud secret set openai
@@ -84,7 +86,7 @@ Written from the kit README and `sbx --cloud ... --help`. Not yet run end to end
 - [ ] `claude` login completes from the integrated terminal
 - [ ] `-r` clones into the workspace (and a private repo with a `github` secret)
 - [ ] `-e` variables appear in the sandbox shell
-- [ ] `sbx --cloud secret set ... --command/--ref` is accepted in cloud mode
+- [ ] Piping a token into `sbx --cloud secret set github` lets a private `-r` clone succeed
 
 ## Sources
 
