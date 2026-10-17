@@ -127,14 +127,22 @@ fi
 
 if [ "$BYPASS" -eq 1 ]; then
   echo "==> Turning off permission prompts in the Claude VS Code panel"
-  # Merge, don't overwrite: the kit ships its own keys in this file. The extension
-  # ignores permissions.defaultMode, so it needs its own settings.
+  # Merge, don't overwrite: both files already hold settings from the kit and sbx.
+  # 1. The extension ignores permissions.defaultMode, so it needs its own settings.
+  # 2. Without hasSeenAutoDefaultNudge the panel asks "Make auto mode your default?"
+  #    because the user-level defaultMode is bypassPermissions. This is what "No" sets.
   sbx --cloud exec "$NAME" sh -c '
-    f="$HOME/.local/share/code-server/User/settings.json"
-    mkdir -p "$(dirname "$f")"; [ -s "$f" ] || echo "{}" > "$f"
-    jq ". * {\"claudeCode.allowDangerouslySkipPermissions\": true, \"claudeCode.initialPermissionMode\": \"bypassPermissions\"}" "$f" > "$f.tmp" \
-      && mv "$f.tmp" "$f" || { rm -f "$f.tmp"; exit 1; }
-  ' || { echo "Could not update the VS Code settings in the sandbox." >&2; exit 1; }
+    merge() {
+      f="$HOME/$1"; mkdir -p "$(dirname "$f")"; [ -s "$f" ] || echo "{}" > "$f"
+      jq --argjson patch "$2" ". * \$patch" "$f" > "$f.tmp" && mv "$f.tmp" "$f" || { rm -f "$f.tmp"; exit 1; }
+    }
+    merge "$1" "$2" && merge "$3" "$4"
+  ' _ \
+    .local/share/code-server/User/settings.json \
+    '{"claudeCode.allowDangerouslySkipPermissions": true, "claudeCode.initialPermissionMode": "bypassPermissions"}' \
+    .claude.json \
+    '{"hasSeenAutoDefaultNudge": true}' \
+    || { echo "Could not update the Claude settings in the sandbox." >&2; exit 1; }
 fi
 
 echo

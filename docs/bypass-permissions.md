@@ -77,11 +77,14 @@ Checked on `sbx` v0.48.0-rc4 with an `anthropic` OAuth secret stored, 2026-10-17
 4. **The kit's `User/settings.json` is not rewritten on restart.** The two `claudeCode.*` keys added by `-y` were still there afterwards, alongside the kit's six keys.
 5. **The extension defines both settings** (`claudeCode.allowDangerouslySkipPermissions`, `claudeCode.initialPermissionMode` with `bypassPermissions` in its enum) in its `package.json` for version 2.1.302.
 
+6. **The panel asks "Make auto mode your default permission mode?"** even with `-y`. This is the extension's auto-default nudge, and the Claude CLI decides to send it. From the CLI's code (v2.1.280), it is offered when `~/.claude.json` has no `hasSeenAutoDefaultNudge`, the user-level `permissions.defaultMode` is set to something other than `auto` (here `bypassPermissions`, from `sbx`), and no project, local, flag or policy settings set a mode. "No, keep bypass permissions" just writes `hasSeenAutoDefaultNudge: true`. "Yes" switches the default to auto, so avoid it.
+7. **`sbx` regenerates `~/.claude.json` on every start**, like `~/.claude/settings.json`. After a stop and start it had 3 keys and the nudge flag was gone. `-y` sets the flag at launch, so a fresh launch skips the question, but a restart brings it back.
+
 Not checked: that the panel really opens in Bypass permissions mode after `-y`. That needs the browser UI, and only the settings were inspected. Also unchecked: whether the cloud sbx agent session uses `--dangerously-skip-permissions` as the Docker docs say for local runs.
 
 ## What `-y` does
 
-`launch.sh -y` runs, after the health check, one `sbx --cloud exec` that merges the two `claudeCode.*` keys into `~/.local/share/code-server/User/settings.json` with `jq`. It merges rather than overwrites, because the kit ships its own keys in that file. If `jq` fails, the file is left untouched and the script exits with an error.
+`launch.sh -y` runs, after the health check, one `sbx --cloud exec` that uses `jq` to merge the two `claudeCode.*` keys into `~/.local/share/code-server/User/settings.json` and `hasSeenAutoDefaultNudge: true` into `~/.claude.json`. It merges rather than overwrites, because both files already hold other keys. If `jq` fails, that file is left untouched and the script exits with an error.
 
 Without `-y`, the script changes nothing, so the terminal and the sbx session still skip prompts because `sbx` does. The script has no switch to turn that off.
 

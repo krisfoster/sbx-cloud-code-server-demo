@@ -38,7 +38,7 @@ Cloud sandboxes have no host workspace, so a local directory can't be passed in.
 2. `sbx --cloud ports NAME --publish 8080`: asks the cloud control plane for a public URL for code-server's port. The kit now declares port 8080 itself, which publishes it automatically for local sandboxes. Whether that alone gives a public URL in the cloud is untested, so the script still publishes it explicitly.
 3. Polls `http://localhost:8080/healthz` inside the sandbox for up to 3 minutes. If code-server never answers, it prints `/tmp/code-server.log` and exits.
 4. With `-r`: reads the workspace path from the kit's `start-code-server.sh` and runs `git clone` into it.
-5. With `-y`: merges two `claudeCode.*` keys into code-server's user `settings.json` inside the sandbox.
+5. With `-y`: merges two `claudeCode.*` keys into code-server's user `settings.json` and sets `hasSeenAutoDefaultNudge` in `~/.claude.json`, both inside the sandbox.
 6. `sbx --cloud ports NAME` to print the URL.
 
 ## Sign in to Claude
@@ -117,7 +117,15 @@ Claude runs in three places in the sandbox, and in a cloud sandbox two of them a
 | `claude` in the integrated terminal | Yes. `sbx` writes `permissions.defaultMode: bypassPermissions` to `~/.claude/settings.json` on every start, and `claude` reports `permissionMode: bypassPermissions`. |
 | Claude panel in VS Code (Spark icon) | No. The extension ignores that file and has its own settings. |
 
-`-y` is the opt-in for the third one. It merges `claudeCode.allowDangerouslySkipPermissions` and `claudeCode.initialPermissionMode: bypassPermissions` into `~/.local/share/code-server/User/settings.json` in the sandbox, keeping the kit's own keys, and the change survives a stop and start.
+`-y` is the opt-in for the third one. It merges `claudeCode.allowDangerouslySkipPermissions` and `claudeCode.initialPermissionMode: bypassPermissions` into `~/.local/share/code-server/User/settings.json` in the sandbox, keeping the kit's own keys, and that change survives a stop and start.
+
+It also sets `hasSeenAutoDefaultNudge: true` in `~/.claude.json`. Without it the panel asks "Make auto mode your default permission mode?" (buttons "Yes, set auto mode as my default" and "No, keep bypass permissions"), because the user-level default is bypass. That flag is exactly what clicking "No" sets. `sbx` regenerates `~/.claude.json` when a sandbox restarts, so after a stop and start the question comes back. Click "No" again, or re-run:
+
+```bash
+sbx --cloud exec NAME sh -c 'f=$HOME/.claude.json; jq ". + {hasSeenAutoDefaultNudge: true}" $f > $f.tmp && mv $f.tmp $f'
+```
+
+Do not click "Yes": it changes your default to auto mode.
 
 ```bash
 ./launch.sh -y
@@ -147,6 +155,8 @@ Written from the kit README and `sbx --cloud ... --help`, then partly checked on
 - [x] `sbx --cloud secret set anthropic --oauth` lets `claude -p` run in a new sandbox with no login
 - [x] `claude` in the terminal starts in `bypassPermissions` with no flags (checked with `claude -p ... --output-format stream-json`)
 - [x] `-y` writes both `claudeCode.*` keys, keeps the kit's keys, and the keys survive a stop and start
+- [x] `-y` sets `hasSeenAutoDefaultNudge`; it survives a Claude CLI run but not a stop and start
+- [ ] With that flag set, the panel no longer shows the "Make auto mode your default?" question (read from the CLI's code, not seen in the UI)
 - [ ] The Claude panel actually starts with Bypass permissions selected after `-y` (settings checked, UI not)
 - [ ] The workspace and Claude extension render correctly in the browser
 - [ ] Interactive `claude` login from the integrated terminal completes
