@@ -2,7 +2,7 @@
 #
 # Launch a Docker cloud sandbox running the code-server kit (VS Code in the browser).
 #
-#   ./launch.sh [-n NAME] [-t TTL] [-s SIZE] [-k KIT] [-r REPO_URL] [-e KEY[=VALUE]]...
+#   ./launch.sh [-n NAME] [-t TTL] [-s SIZE] [-k KIT] [-r REPO_URL] [-e KEY[=VALUE]]... [-y]
 #
 #   -n NAME  sandbox name (letters, numbers, hyphens; default: code-server-demo)
 #   -t TTL   time to live, e.g. 2h, 90m (default: 4h; hard cap is 24h from creation)
@@ -11,6 +11,8 @@
 #   -r URL   https git repo to clone into the workspace (public repos only)
 #   -e VAR   env var for the sandbox, KEY=VALUE or bare KEY to copy it from your
 #            shell (repeatable). Stored inside the sandbox; see README for secrets.
+#   -y       also skip permission prompts in the Claude VS Code panel. The terminal
+#            'claude' and the sbx session already do. See docs/bypass-permissions.md.
 #
 # Environment overrides: SBX_DEMO_NAME, SBX_DEMO_TTL, SBX_DEMO_SIZE, SBX_DEMO_KIT, SBX_DEMO_REPO
 
@@ -23,8 +25,9 @@ KIT="${SBX_DEMO_KIT:-git+https://github.com/docker/sbx-kits-contrib.git#dir=code
 REPO="${SBX_DEMO_REPO:-}"
 PORT=8080
 ENVS=()
+BYPASS=0
 
-while getopts "n:t:s:k:r:e:h" opt; do
+while getopts "n:t:s:k:r:e:yh" opt; do
   case $opt in
     n) NAME=$OPTARG ;;
     t) TTL=$OPTARG ;;
@@ -32,7 +35,8 @@ while getopts "n:t:s:k:r:e:h" opt; do
     k) KIT=$OPTARG ;;
     r) REPO=$OPTARG ;;
     e) ENVS+=("$OPTARG") ;;
-    h) sed -n '2,16p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    y) BYPASS=1 ;;
+    h) sed -n '2,18p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) exit 2 ;;
   esac
 done
@@ -121,9 +125,25 @@ if [ -n "$REPO" ]; then
   echo "    Cloned into $ws/$(basename "$REPO" .git)"
 fi
 
+if [ "$BYPASS" -eq 1 ]; then
+  echo "==> Turning off permission prompts in the Claude VS Code panel"
+  # Merge, don't overwrite: the kit ships its own keys in this file. The extension
+  # ignores permissions.defaultMode, so it needs its own settings.
+  sbx --cloud exec "$NAME" sh -c '
+    f="$HOME/.local/share/code-server/User/settings.json"
+    mkdir -p "$(dirname "$f")"; [ -s "$f" ] || echo "{}" > "$f"
+    jq ". * {\"claudeCode.allowDangerouslySkipPermissions\": true, \"claudeCode.initialPermissionMode\": \"bypassPermissions\"}" "$f" > "$f.tmp" \
+      && mv "$f.tmp" "$f" || { rm -f "$f.tmp"; exit 1; }
+  ' || { echo "Could not update the VS Code settings in the sandbox." >&2; exit 1; }
+fi
+
 echo
 echo "==> Ready. Public URL for port $PORT:"
 sbx --cloud ports "$NAME"
+if [ "$BYPASS" -eq 1 ]; then
+  echo
+  echo "WARNING: -y is on. The Claude panel now runs commands and edits files without asking."
+fi
 cat <<MSG
 
 WARNING: the kit runs code-server with --auth none. The URL above reaches a

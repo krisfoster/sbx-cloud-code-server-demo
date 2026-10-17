@@ -14,6 +14,7 @@ Launch a Docker **cloud sandbox** that runs VS Code in your browser (code-server
 ./launch.sh -n my-demo -t 2h -s large
 ./launch.sh -r https://github.com/owner/repo.git   # also clone a repo into the workspace
 ./launch.sh -e MY_VAR=value -e HOME_TOKEN            # pass env vars (see below)
+./launch.sh -y                                       # no permission prompts in the Claude panel (see below)
 ./teardown.sh               # delete it when you are done (-n NAME for a non-default name)
 ```
 
@@ -25,6 +26,7 @@ Launch a Docker **cloud sandbox** that runs VS Code in your browser (code-server
 | `-k KIT` | `SBX_DEMO_KIT` | `git+https://github.com/docker/sbx-kits-contrib.git#dir=code-server` | Kit reference. The kit's published OCI artifact `docker.io/sbx/code-server-kit:latest` should also work but is untested here. |
 | `-r URL` | `SBX_DEMO_REPO` | none | Public `https://` repo to clone into the workspace. |
 | `-e VAR` | none | none | Env var, `KEY=VALUE` or bare `KEY`. Repeatable. |
+| `-y` | none | off | Turn off permission prompts in the Claude VS Code panel. See [Permission prompts](#permission-prompts). |
 
 `./launch.sh -h` prints the same summary. The script refuses to run if a cloud sandbox with that name already exists.
 
@@ -36,7 +38,8 @@ Cloud sandboxes have no host workspace, so a local directory can't be passed in.
 2. `sbx --cloud ports NAME --publish 8080`: asks the cloud control plane for a public URL for code-server's port. The kit now declares port 8080 itself, which publishes it automatically for local sandboxes. Whether that alone gives a public URL in the cloud is untested, so the script still publishes it explicitly.
 3. Polls `http://localhost:8080/healthz` inside the sandbox for up to 3 minutes. If code-server never answers, it prints `/tmp/code-server.log` and exits.
 4. With `-r`: reads the workspace path from the kit's `start-code-server.sh` and runs `git clone` into it.
-5. `sbx --cloud ports NAME` to print the URL.
+5. With `-y`: merges two `claudeCode.*` keys into code-server's user `settings.json` inside the sandbox.
+6. `sbx --cloud ports NAME` to print the URL.
 
 ## Sign in to Claude
 
@@ -104,6 +107,24 @@ export MY_TOKEN=...
 
 They are baked into the sandbox and visible to its agent session. Anyone with the published URL has a terminal there and can read them, so use env vars for non-sensitive config and the secrets above for credentials. With `sbx` directly, `--env-file` is also available.
 
+## Permission prompts
+
+Claude runs in three places in the sandbox, and in a cloud sandbox two of them already skip permission prompts:
+
+| Where | Prompts off by default? |
+| --- | --- |
+| `sbx --cloud attach NAME` (the sbx agent session) | Yes |
+| `claude` in the integrated terminal | Yes. `sbx` writes `permissions.defaultMode: bypassPermissions` to `~/.claude/settings.json` on every start, and `claude` reports `permissionMode: bypassPermissions`. |
+| Claude panel in VS Code (Spark icon) | No. The extension ignores that file and has its own settings. |
+
+`-y` is the opt-in for the third one. It merges `claudeCode.allowDangerouslySkipPermissions` and `claudeCode.initialPermissionMode: bypassPermissions` into `~/.local/share/code-server/User/settings.json` in the sandbox, keeping the kit's own keys, and the change survives a stop and start.
+
+```bash
+./launch.sh -y
+```
+
+Dangerous: Claude then edits files and runs commands without asking, using the credentials the proxy injects. A cloned repo, a fetched page or a dependency can steer it with prompt injection. Keep the TTL short and store only the secrets the demo needs. Details and caveats in [docs/bypass-permissions.md](docs/bypass-permissions.md).
+
 ## Useful commands
 
 ```bash
@@ -124,6 +145,9 @@ Written from the kit README and `sbx --cloud ... --help`, then partly checked on
 - [x] `-r` clones a public repo into the workspace
 - [x] `-e` variables appear in the sandbox shell
 - [x] `sbx --cloud secret set anthropic --oauth` lets `claude -p` run in a new sandbox with no login
+- [x] `claude` in the terminal starts in `bypassPermissions` with no flags (checked with `claude -p ... --output-format stream-json`)
+- [x] `-y` writes both `claudeCode.*` keys, keeps the kit's keys, and the keys survive a stop and start
+- [ ] The Claude panel actually starts with Bypass permissions selected after `-y` (settings checked, UI not)
 - [ ] The workspace and Claude extension render correctly in the browser
 - [ ] Interactive `claude` login from the integrated terminal completes
 - [ ] `echo $KEY | sbx --cloud secret set anthropic` (API key) works in a new sandbox
@@ -131,7 +155,7 @@ Written from the kit README and `sbx --cloud ... --help`, then partly checked on
 
 ## Further docs
 
-- [Skipping Claude's permission prompts](docs/bypass-permissions.md): research on running Claude in bypass-permissions mode in this sandbox (not implemented yet)
+- [Skipping Claude's permission prompts](docs/bypass-permissions.md): what runs where, what was tested, and the risks of `-y`
 
 ## Sources
 

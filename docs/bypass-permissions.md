@@ -1,6 +1,6 @@
 # Skipping Claude's permission prompts in the sandbox
 
-Research notes on running Claude in bypass-permissions mode (`--dangerously-skip-permissions`) inside the demo's cloud sandbox. Nothing here is implemented in `launch.sh` yet, and none of it has been tested in a cloud sandbox. See [Open questions](#open-questions).
+Notes on running Claude in bypass-permissions mode (`--dangerously-skip-permissions`) inside the demo's cloud sandbox. `launch.sh -y` implements the part that needs implementing (the VS Code panel). See [Tested in a cloud sandbox](#tested-in-a-cloud-sandbox) for what was checked and what turned out different from the research below.
 
 Researched 2026-10-17 against `sbx` v0.48.0, the [code-server kit](https://github.com/docker/sbx-kits-contrib/tree/main/code-server) and the Claude Code docs.
 
@@ -11,8 +11,8 @@ The sandbox runs Claude in three places, and each picks its permission mode diff
 | Where | How it starts | Bypass today? | What enables it |
 |---|---|---|---|
 | sbx agent session (`sbx --cloud attach NAME`) | `sbx --cloud run … claude` in `launch.sh` | Yes, per Docker's docs | Nothing to do |
-| `claude` typed in code-server's integrated terminal | Plain `claude` | No, starts in the built-in default (auto) | `~/.claude/settings.json` in the sandbox |
-| Claude panel in VS Code (Spark icon) | The Claude Code extension in code-server | No | code-server user `settings.json` in the sandbox |
+| `claude` typed in code-server's integrated terminal | Plain `claude` | Yes in a cloud sandbox: `sbx` seeds `~/.claude/settings.json` (see below). The research assumed not. | `~/.claude/settings.json` in the sandbox |
+| Claude panel in VS Code (Spark icon) | The Claude Code extension in code-server | No. `launch.sh -y` enables it. | code-server user `settings.json` in the sandbox |
 
 ### sbx agent session
 
@@ -26,6 +26,8 @@ sbx --cloud run -d --name NAME claude -- --dangerously-skip-permissions agents  
 `launch.sh` passes nothing after `--`, so the default applies. The Docker page describes local `sbx run`. That cloud sandboxes use the same default is assumed, not checked.
 
 ### `claude` in the integrated terminal
+
+> **Superseded by testing.** In a cloud sandbox `sbx` already writes `defaultMode: bypassPermissions` to this file on every start, so there is nothing to add. The text below is the general Claude Code behaviour, kept for reference. See [Tested in a cloud sandbox](#tested-in-a-cloud-sandbox).
 
 A terminal session takes its mode from the first of these that applies ([permission modes](https://code.claude.com/docs/en/permission-modes)):
 
@@ -65,19 +67,25 @@ VS Code reads `initialPermissionMode` from user settings only and ignores worksp
 }
 ```
 
-## Ways to apply it
+## Tested in a cloud sandbox
 
-**A. Opt-in flag in `launch.sh` (recommended).** Add a flag such as `-y`. After the health check, `sbx --cloud exec` merges the keys above into both files. It must merge, not overwrite: the kit's `User/settings.json` has its own keys, and `~/.claude/settings.json` probably holds the credential proxy's auth setup (`claude` reports an `api_key_helper` auth method when an `anthropic` secret is stored).
+Checked on `sbx` v0.48.0-rc4 with an `anthropic` OAuth secret stored, 2026-10-17.
 
-**B. Fork the kit.** Put the two `claudeCode.*` keys in the fork's `files/home/.local/share/code-server/User/settings.json` and pass it with `-k`. This covers the VS Code panel only, so the terminal `claude` still needs the `exec` step from A.
+1. **The terminal `claude` is already in bypass mode.** A fresh sandbox has `~/.claude/settings.json` containing `"permissions": {"defaultMode": "bypassPermissions"}`, `bypassPermissionsModeAccepted: true` and an `apiKeyHelper`. `claude -p ... --output-format stream-json --verbose` reports `permissionMode: bypassPermissions`. Nothing to enable.
+2. **`sbx` rewrites that file on every start.** After a stop and start it was regenerated: `defaultMode` and `bypassPermissionsModeAccepted` came back, but an extra key added by hand (`skipDangerousModePermissionPrompt`) was gone. Edits to `~/.claude/settings.json` are not durable, and `-y` doesn't make any.
+3. **`jq` and `python3` exist in the sandbox**, and the agent runs as uid 1000, so the merge needs no extra install and bypass mode isn't refused as root.
+4. **The kit's `User/settings.json` is not rewritten on restart.** The two `claudeCode.*` keys added by `-y` were still there afterwards, alongside the kit's six keys.
+5. **The extension defines both settings** (`claudeCode.allowDangerouslySkipPermissions`, `claudeCode.initialPermissionMode` with `bypassPermissions` in its enum) in its `package.json` for version 2.1.302.
 
-## Open questions
+Not checked: that the panel really opens in Bypass permissions mode after `-y`. That needs the browser UI, and only the settings were inspected. Also unchecked: whether the cloud sbx agent session uses `--dangerously-skip-permissions` as the Docker docs say for local runs.
 
-These need a signed-in cloud sandbox to answer:
+## What `-y` does
 
-1. Does the cloud `claude` agent use the same `--dangerously-skip-permissions` default as local `sbx run`?
-2. What does `~/.claude/settings.json` contain in a fresh sandbox, and is `jq` (or another JSON tool) available to merge into it?
-3. Does the kit rewrite `User/settings.json` when a stopped sandbox starts again? If so, an `exec` edit is lost after a stop and start, and the setting would need to go in the kit (option B) or be reapplied on start.
+`launch.sh -y` runs, after the health check, one `sbx --cloud exec` that merges the two `claudeCode.*` keys into `~/.local/share/code-server/User/settings.json` with `jq`. It merges rather than overwrites, because the kit ships its own keys in that file. If `jq` fails, the file is left untouched and the script exits with an error.
+
+Without `-y`, the script changes nothing, so the terminal and the sbx session still skip prompts because `sbx` does. The script has no switch to turn that off.
+
+An alternative is forking the kit and shipping the two keys in its `files/home/.local/share/code-server/User/settings.json`, then passing the fork with `-k`. That avoids the `exec` step but needs a maintained fork.
 
 ## Risk
 
