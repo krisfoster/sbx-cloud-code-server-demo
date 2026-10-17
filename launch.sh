@@ -130,6 +130,7 @@ WARNING: the kit runs code-server with --auth none. The URL above reaches a
 full editor and terminal in the sandbox, so treat it as a secret and run
 ./teardown.sh -n $NAME when you are done.
 
-Next: open the URL, then in the integrated terminal (Ctrl+\`) run 'claude' and
-sign in. See README.md.
+Next: open the URL. If you stored an 'anthropic' secret before launching,
+Claude is already signed in. Otherwise run 'claude' in the integrated terminal
+(Ctrl+\`) and sign in. See "Sign in to Claude" in README.md.
 MSG

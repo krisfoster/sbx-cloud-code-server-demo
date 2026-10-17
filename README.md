@@ -14,16 +14,29 @@ Launch a Docker **cloud sandbox** that runs VS Code in your browser (code-server
 ./launch.sh -n my-demo -t 2h -s large
 ./launch.sh -r https://github.com/owner/repo.git   # also clone a repo into the workspace
 ./launch.sh -e MY_VAR=value -e HOME_TOKEN            # pass env vars (see below)
-./teardown.sh               # delete it when you are done
+./teardown.sh               # delete it when you are done (-n NAME for a non-default name)
 ```
+
+| Option | Env override | Default | Meaning |
+| --- | --- | --- | --- |
+| `-n NAME` | `SBX_DEMO_NAME` | `code-server-demo` | Sandbox name. `teardown.sh` reads the same variable. |
+| `-t TTL` | `SBX_DEMO_TTL` | `4h` | Time to live, e.g. `90m`, `2h`. Hard cap 24h from creation. |
+| `-s SIZE` | `SBX_DEMO_SIZE` | `medium` | `micro` (1 vCPU/2 GiB), `small` (2/4), `medium` (4/8), `large` (8/16), `xl` (16/32). |
+| `-k KIT` | `SBX_DEMO_KIT` | `git+https://github.com/docker/sbx-kits-contrib.git#dir=code-server` | Kit reference. The kit's published OCI artifact `docker.io/sbx/code-server-kit:latest` should also work but is untested here. |
+| `-r URL` | `SBX_DEMO_REPO` | none | Public `https://` repo to clone into the workspace. |
+| `-e VAR` | none | none | Env var, `KEY=VALUE` or bare `KEY`. Repeatable. |
+
+`./launch.sh -h` prints the same summary. The script refuses to run if a cloud sandbox with that name already exists.
 
 Cloud sandboxes have no host workspace, so a local directory can't be passed in. Use `-r` (or `SBX_DEMO_REPO`) to clone a public `https://` repo instead. It lands in a subfolder of the workspace named after the repo, and the repo's host is added to the sandbox's allowed egress. Private repos are untested: store a `github` secret first (see [Secrets](#secrets)) and the proxy may authenticate the clone.
 
-`launch.sh` runs three things:
+`launch.sh` runs these steps:
 
-1. `sbx --cloud run -d --name NAME --kit <code-server kit> claude`: creates a cloud sandbox on the built-in `claude` agent with the kit layered on. The kit is a mixin that requires `claude`, so the VS Code extension shares the sandbox's Claude setup.
-2. `sbx --cloud ports NAME --publish 8080`: asks the cloud control plane for a public URL for code-server's port.
-3. A health check against code-server inside the sandbox, then `sbx --cloud ports NAME` to print the URL.
+1. `sbx --cloud run -d --name NAME --cpus N --memory M --ttl TTL --kit <code-server kit> claude`, plus `--allow-network <repo host>` for `-r` and `--env` for each `-e`. This creates a cloud sandbox on the built-in `claude` agent with the kit layered on. The kit is a mixin that requires `claude`, so the VS Code extension shares the sandbox's Claude credentials.
+2. `sbx --cloud ports NAME --publish 8080`: asks the cloud control plane for a public URL for code-server's port. The kit now declares port 8080 itself, which publishes it automatically for local sandboxes. Whether that alone gives a public URL in the cloud is untested, so the script still publishes it explicitly.
+3. Polls `http://localhost:8080/healthz` inside the sandbox for up to 3 minutes. If code-server never answers, it prints `/tmp/code-server.log` and exits.
+4. With `-r`: reads the workspace path from the kit's `start-code-server.sh` and runs `git clone` into it.
+5. `sbx --cloud ports NAME` to print the URL.
 
 ## Sign in to Claude
 
@@ -48,12 +61,12 @@ op read 'op://Private/Anthropic/api-key' | sbx --cloud secret set anthropic   # 
 ### Option 2: sign in interactively
 
 1. Open the printed URL in your browser. The workspace opens on launch.
-2. Open the integrated terminal (Ctrl+`) and run `claude`, or click the Claude (Spark) icon in the sidebar once.
+2. Open the integrated terminal (Ctrl+`) and run `claude`, or click the Claude **Spark** icon in the editor toolbar (top right). The kit sets the Claude panel to open in the sidebar.
 3. If prompted, choose a login method and open the sign-in link in your local browser.
 4. The last step redirects to `http://localhost:<port>/callback?code=...`. That listener runs inside the sandbox, but `localhost` in your browser is your own machine, so the page fails to load. Copy the full URL from the address bar and paste it (or its `code` value) back into the sandbox terminal. It still works, because the code is in the URL.
 
 > [!warning]
-> The kit starts code-server with `--auth none`. In a cloud sandbox the published port gets a public URL, so anyone holding that URL has an editor and terminal inside the sandbox. Treat the URL as a secret, keep the TTL short, and tear down when finished. For anything beyond a demo, fork the kit and add a password to the startup command.
+> The kit starts code-server with `--auth none`. Upstream treats that as fine because a local sandbox only publishes to `localhost`. In a cloud sandbox the published port gets a public URL, so anyone holding that URL has an editor and terminal inside the sandbox. Treat the URL as a secret, keep the TTL short, and tear down when finished. For anything beyond a demo, fork the kit and add a password to the startup command.
 
 ## Secrets
 
@@ -103,7 +116,7 @@ sbx --cloud ttl code-server-demo +2h             # extend the TTL (24h hard cap)
 
 ## Status
 
-Written from the kit README and `sbx --cloud ... --help`, then partly checked on `sbx` v0.48.0-rc4. Checked items below have been run; unchecked ones have not.
+Written from the kit README and `sbx --cloud ... --help`, then partly checked on `sbx` v0.48.0-rc4. Last compared against the upstream kit (`spec.yaml`, README) on 2026-10-17. Checked items below have been run; unchecked ones have not.
 
 - [x] `--kit` with a `git+https` reference works on `sbx --cloud run`
 - [x] The published URL answers (`/healthz` returns 200)
