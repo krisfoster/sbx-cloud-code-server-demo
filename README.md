@@ -129,6 +129,10 @@ Written from the kit README and `sbx --cloud ... --help`, then partly checked on
 - [ ] `echo $KEY | sbx --cloud secret set anthropic` (API key) works in a new sandbox
 - [ ] A `github` secret lets `-r` clone a private repo
 
+## Further docs
+
+- [Skipping Claude's permission prompts](docs/bypass-permissions.md): research on running Claude in bypass-permissions mode in this sandbox (not implemented yet)
+
 ## Sources
 
 - [code-server kit](https://github.com/docker/sbx-kits-contrib/tree/main/code-server)
