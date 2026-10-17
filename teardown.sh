@@ -13,4 +13,4 @@ while getopts "n:h" opt; do
   esac
 done
 
-sbx --cloud rm "$NAME"
+sbx --cloud rm --force "$NAME"
