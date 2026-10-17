@@ -4,7 +4,7 @@ Launch a Docker **cloud sandbox** that runs VS Code in your browser (code-server
 
 ## Requirements
 
-- `sbx` installed and signed in (`sbx login`). Written against `v0.47.0-rc2`, re-checked on `v0.48.0-rc4`.
+- `sbx` installed and signed in (`sbx login`). Written against `v0.47.0-rc2`, re-checked on `v0.48.0-rc4`, help output re-checked on `v0.48.0`.
 - Access to Docker cloud sandboxes (`sbx --cloud ls` should not error).
 
 ## Use
@@ -91,7 +91,7 @@ sbx --cloud secret ls       # list stored secrets
 sbx --cloud secret rm github   # remove a global secret
 ```
 
-Built-in services include `anthropic`, `github`, `openai`, `google`, `groq`, `mistral` and `openrouter`. For an API that isn't built in, `sbx --cloud secret set-custom --host api.example.com --env API_KEY --value ...` (experimental) gives the sandbox a placeholder and has the proxy add the real header for that host.
+Built-in services in v0.48.0 are `anthropic`, `copilot`, `cursor`, `devin`, `droid`, `github`, `google`, `groq`, `mistral`, `nebius`, `openai`, `openrouter` and `xai`. For an API that isn't built in, `sbx --cloud secret set-custom --host api.example.com --env API_KEY --value ...` (experimental) gives the sandbox a placeholder and has the proxy set the real value in a header for that host (`Authorization: Bearer …` unless you pass `--header`/`--format`). In cloud mode `--host` takes exact DNS names only, no wildcards.
 
 ## Environment variables
 
@@ -111,12 +111,13 @@ sbx --cloud ls                                   # list cloud sandboxes
 sbx --cloud ports code-server-demo               # show the public URL again
 sbx --cloud exec code-server-demo cat /tmp/code-server.log
 sbx --cloud attach code-server-demo              # terminal into the agent
-sbx --cloud ttl code-server-demo +2h             # extend the TTL (24h hard cap)
+sbx --cloud ttl code-server-demo                 # show the remaining TTL
+sbx --cloud ttl +2h code-server-demo             # extend the TTL (24h hard cap)
 ```
 
 ## Status
 
-Written from the kit README and `sbx --cloud ... --help`, then partly checked on `sbx` v0.48.0-rc4. Last compared against the upstream kit (`spec.yaml`, README) on 2026-10-17. Checked items below have been run; unchecked ones have not.
+Written from the kit README and `sbx --cloud ... --help`, then partly checked on `sbx` v0.48.0-rc4. Every command and flag the scripts and this README use was re-checked against `sbx --cloud … --help` on v0.48.0. Last compared against the upstream kit (`spec.yaml`, README) on 2026-10-17. Checked items below have been run; unchecked ones have not.
 
 - [x] `--kit` with a `git+https` reference works on `sbx --cloud run`
 - [x] The published URL answers (`/healthz` returns 200)
